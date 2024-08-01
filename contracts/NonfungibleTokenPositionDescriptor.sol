@@ -10,7 +10,7 @@ import './interfaces/INonfungiblePositionManager.sol';
 import './interfaces/INonfungibleTokenPositionDescriptor.sol';
 import './interfaces/IERC20Metadata.sol';
 import './libraries/PoolAddress.sol';
-import './libraries/NFTDescriptor.sol';
+import './NFTDescriptorEx.sol';
 import './libraries/TokenRatioSortOrder.sol';
 
 /// @title Describes NFT token positions
@@ -26,9 +26,13 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
     /// @dev A null-terminated string
     bytes32 public immutable nativeCurrencyLabelBytes;
 
-    constructor(address _WETH9, bytes32 _nativeCurrencyLabelBytes) {
+    /// @dev A NFTDescriptorEx address
+    address private immutable nftDescriptorEx;
+
+    constructor(address _WETH9, bytes32 _nativeCurrencyLabelBytes, address _nftDescriptorEx) {
         WETH9 = _WETH9;
         nativeCurrencyLabelBytes = _nativeCurrencyLabelBytes;
+        nftDescriptorEx = _nftDescriptorEx;
     }
 
     /// @notice Returns the native currency label as a string
@@ -45,22 +49,19 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
     }
 
     /// @inheritdoc INonfungibleTokenPositionDescriptor
-    function tokenURI(INonfungiblePositionManager positionManager, uint256 tokenId)
-        external
-        view
-        override
-        returns (string memory)
-    {
-        (, , address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, , , , , ) =
-            positionManager.positions(tokenId);
+    function tokenURI(
+        INonfungiblePositionManager positionManager,
+        uint256 tokenId
+    ) external view override returns (string memory) {
+        (, , address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, , , , , ) = positionManager
+            .positions(tokenId);
 
-        IUniswapV3Pool pool =
-            IUniswapV3Pool(
-                PoolAddress.computeAddress(
-                    positionManager.factory(),
-                    PoolAddress.PoolKey({token0: token0, token1: token1, fee: fee})
-                )
-            );
+        IUniswapV3Pool pool = IUniswapV3Pool(
+            PoolAddress.computeAddress(
+                positionManager.factory(),
+                PoolAddress.PoolKey({token0: token0, token1: token1, fee: fee})
+            )
+        );
 
         bool _flipRatio = flipRatio(token0, token1, ChainId.get());
         address quoteTokenAddress = !_flipRatio ? token1 : token0;
@@ -68,8 +69,8 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
         (, int24 tick, , , , , ) = pool.slot0();
 
         return
-            NFTDescriptor.constructTokenURI(
-                NFTDescriptor.ConstructTokenURIParams({
+            NFTDescriptorEx(nftDescriptorEx).constructTokenURI(
+                NFTDescriptorEx.ConstructTokenURIParams({
                     tokenId: tokenId,
                     quoteTokenAddress: quoteTokenAddress,
                     baseTokenAddress: baseTokenAddress,
@@ -92,11 +93,7 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
             );
     }
 
-    function flipRatio(
-        address token0,
-        address token1,
-        uint256 chainId
-    ) public view returns (bool) {
+    function flipRatio(address token0, address token1, uint256 chainId) public view returns (bool) {
         return tokenRatioPriority(token0, chainId) > tokenRatioPriority(token1, chainId);
     }
 
